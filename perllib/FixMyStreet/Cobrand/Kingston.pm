@@ -3,7 +3,6 @@ use parent 'FixMyStreet::Cobrand::UKCouncils';
 
 use Moo;
 with 'FixMyStreet::Roles::CobrandSLWP';
-with 'FixMyStreet::Roles::Bottomline';
 with 'FixMyStreet::Roles::SCP';
 
 sub council_area_id { return 2480; }
@@ -45,6 +44,8 @@ sub waste_check_staff_payment_permissions {
 has lpi_value => ( is => 'ro', default => 'KINGSTON UPON THAMES' );
 
 sub waste_payment_ref_council_code { "RBK" }
+
+sub garden_collection_time { '6:30am' }
 
 sub image_for_unit {
     my ($self, $unit) = @_;

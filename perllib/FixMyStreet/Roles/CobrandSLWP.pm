@@ -245,17 +245,17 @@ sub waste_event_state_map {
     };
 }
 
+use constant CONTAINER_REFUSE_140 => 1;
+use constant CONTAINER_REFUSE_240 => 2;
+use constant CONTAINER_REFUSE_360 => 3;
 use constant CONTAINER_RECYCLING_BIN => 12;
 use constant CONTAINER_RECYCLING_BOX => 16;
+use constant CONTAINER_PAPER_BIN => 19;
+use constant CONTAINER_PAPER_BIN_140 => 36;
 
-use constant GARDEN_WASTE_SERVICE_ID => 2247;
 sub garden_service_name { 'garden waste collection service' }
-sub garden_service_id { GARDEN_WASTE_SERVICE_ID }
-sub garden_current_subscription { shift->{c}->stash->{services}{+GARDEN_WASTE_SERVICE_ID} }
-sub get_current_garden_bins { shift->garden_current_subscription->{garden_bins} }
+sub garden_service_id { 2247 }
 
-sub garden_subscription_type_field { 'Request_Type' }
-sub garden_subscription_container_field { 'Subscription_Details_Containers' }
 sub garden_echo_container_name { 'SLWP - Containers' }
 sub garden_due_days { 30 }
 
@@ -300,15 +300,6 @@ sub service_name_override {
     return $service_name_override{$service->{ServiceId}} // '';
 }
 
-sub bin_payment_types {
-    return {
-        'csc' => 1,
-        'credit_card' => 2,
-        'direct_debit' => 3,
-        'cheque' => 4,
-    };
-}
-
 sub waste_password_hidden { 1 }
 
 # For renewal/modify
@@ -343,12 +334,13 @@ sub waste_containers {
     if ($self->moniker eq 'sutton') {
         return {
             %shared,
-            1 => 'Brown Rubbish Wheelie Bin (140L)',
-            2 => 'Brown Rubbish Wheelie Bin (240L)',
-            3 => 'Brown Rubbish Wheelie Bin (360L)',
+            1 => 'Standard Brown General Waste Wheelie Bin (140L)',
+            2 => 'Larger Brown General Waste Wheelie Bin (240L)',
+            3 => 'Extra Large Brown General Waste Wheelie Bin (360L)',
             35 => 'Rubbish bin (180L)',
             16 => 'Mixed Recycling Green Box (55L)',
             19 => 'Paper and Cardboard Green Wheelie Bin (240L)',
+            36 => 'Paper and Cardboard Green Wheelie Bin (140L)',
             23 => 'Small Kitchen Food Waste Caddy (7L)',
             24 => 'Large Outdoor Food Waste Caddy (23L)',
             26 => 'Garden Waste Wheelie Bin (240L)',
@@ -423,7 +415,7 @@ sub waste_relevant_serviceunits {
             my $schedules = _parse_schedules($task, 'task');
 
             # Ignore retired diesel rounds
-            next if $self->moniker eq 'kingston' && !$schedules->{next} && $service_id != GARDEN_WASTE_SERVICE_ID;
+            next if $self->moniker eq 'kingston' && !$schedules->{next} && $service_id != $self->garden_service_id;
 
             push @rows, {
                 Id => $task->{Id},
@@ -503,6 +495,20 @@ sub waste_service_containers {
             # The most you can request is one
             $request_max->{$container} = 1;
             $self->{c}->stash->{quantities}->{$container} = $quantity;
+
+            if ($self->moniker eq 'sutton') {
+                if ($container == CONTAINER_REFUSE_140 || $container == CONTAINER_REFUSE_360) {
+                    push @$containers, CONTAINER_REFUSE_240;
+                    $request_max->{+CONTAINER_REFUSE_240} = 1;
+                } elsif ($container == CONTAINER_REFUSE_240) {
+                    push @$containers, CONTAINER_REFUSE_140;
+                    $request_max->{+CONTAINER_REFUSE_140} = 1;
+                } elsif ($container == CONTAINER_PAPER_BIN_140) {
+                    $request_max->{+CONTAINER_PAPER_BIN} = 1;
+                    # Swap 140 for 240 in container list
+                    @$containers = map { $_ == CONTAINER_PAPER_BIN_140 ? CONTAINER_PAPER_BIN : $_ } @$containers;
+                }
+            }
         }
     }
 
@@ -518,6 +524,21 @@ sub waste_service_containers {
     }
 
     return ($containers, $request_max);
+}
+
+sub waste_munge_bin_services_open_requests {
+    my ($self, $open_requests) = @_;
+    if ($self->moniker eq 'sutton') {
+        if ($open_requests->{+CONTAINER_REFUSE_140}) {
+            $open_requests->{+CONTAINER_REFUSE_240} = $open_requests->{+CONTAINER_REFUSE_140};
+        } elsif ($open_requests->{+CONTAINER_REFUSE_240}) {
+            $open_requests->{+CONTAINER_REFUSE_140} = $open_requests->{+CONTAINER_REFUSE_240};
+            $open_requests->{+CONTAINER_REFUSE_360} = $open_requests->{+CONTAINER_REFUSE_240};
+        }
+        if ($open_requests->{+CONTAINER_PAPER_BIN_140}) {
+            $open_requests->{+CONTAINER_PAPER_BIN} = $open_requests->{+CONTAINER_PAPER_BIN_140};
+        }
+    }
 }
 
 sub garden_container_data_extract {
@@ -645,20 +666,6 @@ sub waste_garden_renew_form_setup {
     }
 }
 
-sub waste_report_extra_dd_data {
-    my ($self) = @_;
-    my $c = $self->{c};
-
-    if (my $orig = $c->stash->{orig_sub}) {
-        my $p = $c->stash->{report};
-        $p->set_extra_metadata(dd_contact_id => $orig->get_extra_metadata('dd_contact_id'))
-            if $orig->get_extra_metadata('dd_contact_id');
-        $p->set_extra_metadata(dd_mandate_id => $orig->get_extra_metadata('dd_mandate_id'))
-            if $orig->get_extra_metadata('dd_mandate_id');
-        $p->update;
-    }
-}
-
 =head2 waste_munge_report_form_fields
 
 We use a custom report form to add some text to the "About you" page.
@@ -677,22 +684,45 @@ containers.
 
 =cut
 
+sub waste_request_single_radio_list { 1 }
+
 sub waste_munge_request_form_fields {
     my ($self, $field_list) = @_;
+    my $c = $self->{c};
 
     my @radio_options;
+    my @replace_options;
     my %seen;
     for (my $i=0; $i<@$field_list; $i+=2) {
         my ($key, $value) = ($field_list->[$i], $field_list->[$i+1]);
         next unless $key =~ /^container-(\d+)/;
         my $id = $1;
         next if $self->moniker eq 'kingston' && $seen{$id};
-        push @radio_options, {
+
+        my ($cost, $hint);
+        if ($self->moniker eq 'sutton') {
+            ($cost, $hint) = $self->request_cost($id, $c->stash->{quantities});
+        }
+
+        my $data = {
             value => $id,
             label => $self->{c}->stash->{containers}->{$id},
             disabled => $value->{disabled},
+            $hint ? (hint => $hint) : (),
         };
+        my $change_cost = $self->_get_cost('request_change_cost');
+        if ($cost && $change_cost && $cost == $change_cost) {
+            push @replace_options, $data;
+        } else {
+            push @radio_options, $data;
+        }
         $seen{$id} = 1;
+    }
+
+    if (@replace_options) {
+        $radio_options[0]{tags}{divider_template} = "waste/request/intro_replace";
+        $replace_options[0]{tags}{divider_template} = "waste/request/intro_change";
+        push @radio_options, @replace_options;
     }
 
     @$field_list = (
@@ -727,8 +757,9 @@ sub waste_report_form_first_next {
 =head2 waste_request_form_first_next
 
 After picking a container, we jump straight to the about you page if they've
-picked a bag, to the swap-for-a-bin page if they've picked a bin, don't already
-have a bin and are on Kingston; otherwise we move to asking for a reason.
+picked a bag or Sutton changing size, to the swap-for-a-bin page if they've
+picked a bin, don't already have a bin and are on Kingston; otherwise we move
+to asking for a reason.
 
 =cut
 
@@ -736,6 +767,7 @@ sub waste_request_form_first_title { 'Which container do you need?' }
 sub waste_request_form_first_next {
     my $self = shift;
     my $cls = ucfirst $self->council_url;
+    my $containers = $self->{c}->stash->{quantities};
     return sub {
         my $data = shift;
         my $choice = $data->{"container-choice"};
@@ -743,6 +775,14 @@ sub waste_request_form_first_next {
         if ($cls eq 'Kingston' && $choice == CONTAINER_RECYCLING_BIN && !$self->{c}->stash->{container_recycling_bin}) {
             $data->{request_reason} = 'more';
             return 'recycling_swap';
+        }
+        if ($cls eq 'Sutton') {
+            foreach (CONTAINER_REFUSE_140, CONTAINER_REFUSE_240, CONTAINER_PAPER_BIN) {
+                if ($choice == $_ && !$containers->{$_}) {
+                    $data->{request_reason} = 'change_capacity';
+                    return 'about_you';
+                }
+            }
         }
         return 'replacement';
     };
@@ -787,6 +827,20 @@ sub waste_munge_request_data {
             $action_id = 1; # Deliver
             $reason_id = 3; # Change capacity
         }
+    } elsif ($reason eq 'change_capacity') {
+        $action_id = '2::1';
+        $reason_id = '3::3';
+        if ($id == CONTAINER_REFUSE_140) {
+            $id = CONTAINER_REFUSE_240 . '::' . CONTAINER_REFUSE_140;
+        } elsif ($id == CONTAINER_REFUSE_240) {
+            if ($c->stash->{quantities}{+CONTAINER_REFUSE_360}) {
+                $id = CONTAINER_REFUSE_360 . '::' . CONTAINER_REFUSE_240;
+            } else {
+                $id = CONTAINER_REFUSE_140 . '::' . CONTAINER_REFUSE_240;
+            }
+        } elsif ($id == CONTAINER_PAPER_BIN) {
+            $id = CONTAINER_PAPER_BIN_140 . '::' . CONTAINER_PAPER_BIN;
+        }
     } else {
         # No reason, must be a bag
         $action_id = 1; # Deliver
@@ -794,7 +848,13 @@ sub waste_munge_request_data {
         $nice_reason = "Additional bag required";
     }
 
-    $data->{title} = "Request new $container";
+    if ($reason eq 'damaged' || $reason eq 'missing') {
+        $data->{title} = "Request replacement $container";
+    } elsif ($reason eq 'change_capacity') {
+        $data->{title} = "Request exchange for $container";
+    } else {
+        $data->{title} = "Request new $container";
+    }
     $data->{detail} = "Quantity: $quantity\n\n$address";
     $data->{detail} .= "\n\nReason: $nice_reason" if $nice_reason;
 
@@ -843,17 +903,6 @@ sub waste_get_pro_rata_cost {
     return $self->garden_waste_cost_pa($bins);
 }
 
-sub waste_display_payment_method {
-    my ($self, $method) = @_;
-
-    my $display = {
-        direct_debit => _('Direct Debit'),
-        credit_card => _('Credit Card'),
-    };
-
-    return $display->{$method};
-}
-
 sub garden_waste_new_bin_admin_fee {
     my ($self, $new_bins) = @_;
     $new_bins ||= 0;
@@ -873,7 +922,7 @@ sub garden_waste_new_bin_admin_fee {
 
 =head2 waste_cc_payment_line_item_ref
 
-This is only used by Kingston (which uses the SCP role) to provide the
+This is used by the SCP role (all Kingston, Sutton requests) to provide the
 reference for the credit card payment. It differs for bulky waste.
 
 =cut
@@ -882,6 +931,8 @@ sub waste_cc_payment_line_item_ref {
     my ($self, $p) = @_;
     if ($p->category eq 'Bulky collection') {
         return $self->_waste_cc_line_item_ref($p, "BULKY", "");
+    } elsif ($p->category eq 'Request new container') {
+        return $self->_waste_cc_line_item_ref($p, "CCH", "");
     } else {
         return $self->_waste_cc_line_item_ref($p, "GGW", "GW Sub");
     }
@@ -907,110 +958,6 @@ sub _waste_cc_line_item_ref {
 sub waste_cc_payment_sale_ref {
     my ($self, $p) = @_;
     return "GGW" . $p->get_extra_field_value('uprn');
-}
-
-sub garden_waste_dd_munge_form_details {
-    my ($self, $c) = @_;
-
-    $c->stash->{form_name} = $c->stash->{payment_details}->{form_name};
-    if ( $c->stash->{staff_payments_allowed} ) {
-        $c->stash->{form_name} = $c->stash->{payment_details}->{staff_form_name};
-    }
-
-    my $cfg = $self->feature('echo');
-    if ($cfg->{nlpg} && $c->stash->{property}{uprn}) {
-        my $uprn_data = get(sprintf($cfg->{nlpg}, $c->stash->{property}{uprn}));
-        $uprn_data = JSON::MaybeXS->new->decode($uprn_data);
-        my $address = $self->get_address_details_from_nlpg($uprn_data);
-        if ( $address ) {
-            $c->stash->{address1} = $address->{address1};
-            $c->stash->{address2} = $address->{address2};
-            $c->stash->{town} = $address->{town};
-            $c->stash->{postcode} = $address->{postcode};
-        }
-    }
-}
-
-sub garden_waste_dd_redirect_url {
-    my ($self, $p) = @_;
-
-    my $c = $self->{c};
-
-    return $c->cobrand->base_url_with_lang . "/waste/dd_complete";
-}
-
-sub garden_waste_dd_check_success {
-    my ($self, $c) = @_;
-
-    if ( defined( $c->get_param('stage') ) && $c->get_param('stage') == 0 ) {
-        # something has gone wrong and the form has not recorded correctly
-        $c->forward('direct_debit_error');
-        $c->detach();
-    # check if the bank details have been verified
-    } elsif ( $c->get_param('verificationapplied') && lc($c->get_param('verificationapplied')) eq 'true' ) {
-        # and if they have and verification has failed then redirect
-        # to the cancelled page
-        if ( lc $c->get_param('status') eq 'false') {
-            $c->forward('direct_debit_error');
-            $c->detach();
-        }
-    }
-}
-
-sub garden_waste_dd_get_redirect_params {
-    my ($self, $c) = @_;
-
-    my $data = $c->get_param('customData');
-
-    my %params = map {
-        my ($key, $value) = split ':';
-        $key => $value;
-    } split '\^', $data;
-
-    return ($params{reference}, $params{report_id});
-}
-
-sub garden_waste_check_pending {
-    my ($self, $report) = @_;
-
-
-    if ( $report && ($report->get_extra_metadata('ddsubmitted') || 0) == 1 ) {
-        return $report;
-    }
-
-    return undef;
-}
-
-sub garden_waste_dd_complete {
-    my ($self, $report) = @_;
-    $report->set_extra_metadata('ddsubmitted', 1);
-    $report->update();
-}
-
-sub get_address_details_from_nlpg {
-    my ( $self, $uprn_data) = @_;
-
-    my $address;
-    my $property = $uprn_data->{results}->[0]->{LPI};
-    if ( $property ) {
-        $address = {};
-        my @namenumber = (_get_addressable_object($property, 'SAO'), _get_addressable_object($property, 'PAO'));
-        $address->{address1} = join(", ", grep { /./ } map { FixMyStreet::Template::title($_) } @namenumber);
-        $address->{address2} = FixMyStreet::Template::title($property->{STREET_DESCRIPTION});
-        $address->{town} = FixMyStreet::Template::title($property->{TOWN_NAME});
-        $address->{postcode} = $property->{POSTCODE_LOCATOR};
-    }
-    return $address;
-}
-
-sub _get_addressable_object {
-    my ($property, $type) = @_;
-    my $ao = $property->{$type . '_TEXT'} || '';
-    $ao .= ' ' if $ao && $property->{$type . '_START_NUMBER'};
-    $ao .= ($property->{$type . '_START_NUMBER'} || '') . ($property->{$type . '_START_SUFFIX'} || '');
-    $ao .= '-' if $property->{$type . '_END_NUMBER'};
-    $ao .= ($property->{$type . '_END_NUMBER'} || '') . ($property->{$type . '_END_SUFFIX'} || '');
-    return $ao;
 }
 
 =head2 Dashboard export

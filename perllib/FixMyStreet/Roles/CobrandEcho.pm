@@ -19,6 +19,8 @@ requires 'waste_extra_service_info';
 requires 'garden_subscription_event_id';
 requires 'garden_echo_container_name';
 requires 'garden_container_data_extract';
+requires 'garden_due_days';
+requires 'garden_service_id';
 
 requires 'waste_bulky_missed_blocked_codes';
 
@@ -154,6 +156,7 @@ sub bin_services_for_address {
         $request_max ||= $quantity_max{$service_id};
 
         my $open_requests = { map { $_ => $events->{request}->{$_} } grep { $events->{request}->{$_} } @$containers };
+        $self->call_hook(waste_munge_bin_services_open_requests => $open_requests);
 
         my $garden = 0;
         my $garden_bins;
@@ -550,9 +553,6 @@ page with regards to not complete collections, the external
 status code admin is split into three fields, which are then
 combined here for storage.
 
-Brent removes the commas so that eg non-Echo status codes
-will trigger auto-templates.
-
 =cut
 
 sub admin_templates_external_status_code_hook {
@@ -564,8 +564,7 @@ sub admin_templates_external_status_code_hook {
     my $task_state = $c->get_param('task_state') || '';
 
     my $code = "$res_code,$task_type,$task_state";
-    $code = '' if $code eq ',,';
-    $code =~ s/,,$// if $code && $self->moniker eq 'brent';
+    $code =~ s/,,$//;
 
     return $code;
 }
@@ -666,12 +665,7 @@ sub construct_waste_open311_update {
     my $resolution_id = $event->{ResolutionCodeId} || '';
     my $status = $event_type->{states}{$state_id}{state};
     my $description = $event_type->{resolution}{$resolution_id} || $event_type->{states}{$state_id}{name};
-    my $external_status_code;
-    if ($self->moniker eq "brent") {
-        $external_status_code = $resolution_id ? "$resolution_id" : "",
-    } else {
-        $external_status_code = $resolution_id ? "$resolution_id,," : "",
-    }
+    my $external_status_code = $resolution_id ? "$resolution_id" : "";
     my %extra = $self->call_hook(open311_waste_update_extra => $cfg, $event);
     return {
         description => $description,
@@ -795,11 +789,51 @@ sub _get_cost_from_array {
 
 sub _get_cost {
     my ($self, $cost_ref, $date) = @_;
-    my $cost = $self->feature('payment_gateway')->{$cost_ref};
+    my $payments = $self->feature('payment_gateway');
+    my $cost = $payments->{$cost_ref};
     if (ref $cost eq 'ARRAY') {
         $cost = $self->_get_cost_from_array($cost, $date);
     }
     return $cost;
+}
+
+# Garden waste
+
+sub bin_payment_types {
+    return {
+        'csc' => 1,
+        'credit_card' => 2,
+        'direct_debit' => 3,
+        'cheque' => 4,
+    };
+}
+
+sub waste_display_payment_method {
+    my ($self, $method) = @_;
+
+    my $display = {
+        direct_debit => _('Direct Debit'),
+        credit_card => _('Credit Card'),
+    };
+
+    return $display->{$method};
+}
+
+sub garden_current_subscription { $_[0]->{c}->stash->{services}{$_[0]->garden_service_id} }
+sub get_current_garden_bins { shift->garden_current_subscription->{garden_bins} }
+
+sub garden_current_service_from_service_units {
+    my ($self, $services) = @_;
+
+    my $garden;
+    for my $service ( @$services ) {
+        if ( $service->{ServiceId} == $self->garden_service_id ) {
+            $garden = $self->_get_current_service_task($service);
+            last;
+        }
+    }
+
+    return $garden;
 }
 
 sub garden_waste_sacks_cost_pa {
