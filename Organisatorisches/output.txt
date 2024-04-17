@@ -1,0 +1,285 @@
+1048840, #Ahnatal
+1017944, #Alheim
+1044839, #Allendorf
+1008393, #Bad Arolsen
+1046228, #Bad Emstal
+1021248, #Bad Hersfeld
+996810, #Bad Karlshafen
+1046352, #Bad Salzschlirf
+1050005, #Bad Sooden-Allendorf
+1044831, #Bad Wildungen
+1046011, #Bad Zwesten
+1044836, #Battenberg
+1048957, #Baunatal
+1017745, #Bebra
+1050006, #Berkatal
+1046001, #Borken
+1021252, #Breitenbach am Herzberg
+1008465, #Breuna
+1044835, #Bromskirchen
+1046353, #Burghaun
+1044840, #Burgwald
+1046438, #Calden
+561247, #Cornberg
+1015523, #Diemelsee
+1008379, #Diemelstadt
+1046354, #Dipperz
+1046356, #Ebersburg
+1046012, #Edermünde
+1044832, #Edertal
+1046357, #Ehrenberg
+1046358, #Eichenzell
+1046359, #Eiterfeld
+1050010, #Eschwege
+1048853, #Espenau
+1046002, #Felsberg
+678755, #Flieden
+1044833, #Frankenau
+1044834, #Frankenberg
+1021247, #Friedewald
+1046013, #Frielendorf
+1046003, #Fritzlar
+1046348, #Fulda
+1048969, #Fuldabrück
+1048872, #Fuldatal
+1044842, #Gemünden
+1046349, #Gersfeld
+1046014, #Gilserberg
+1046418, #Grebenstein
+1050004, #Großalmerode
+1046360, #Großenlüder
+1046004, #Gudensberg
+1084683, #Gutsbezirk Kaufunger Wald
+996807, #Gutsbezirk Reinhardswald
+1046015, #Guxhagen
+1046334, #Habichtswald
+1044841, #Haina
+1044838, #Hatzfeld
+727780, #Hauneck
+441142, #Haunetal
+996922, #Helsa
+1017948, #Heringen
+596050, #Herleshausen
+1050008, #Hessisch Lichtenau
+1046361, #Hilders
+1046362, #Hofbieber
+996809, #Hofgeismar
+727779, #Hohenroda
+1046005, #Homberg
+1046363, #Hosenfeld
+1046350, #Hünfeld
+1048864, #Immenhausen
+1046016, #Jesberg
+1046364, #Kalbach
+996925, #Kaufungen
+1021253, #Kirchheim
+871288, #Knüllwald
+1015411, #Korbach
+1046017, #Körle
+1046366, #Künzell
+1015416, #Lichtenfels
+1046406, #Liebenau
+996921, #Lohfelden
+1017945, #Ludwigsau
+1046018, #Malsfeld
+1050007, #Meinhard
+1050009, #Meißner
+1046006, #Melsungen
+1046019, #Morschen
+1046225, #Naumburg
+1017940, #Nentershausen
+1050002, #Neu-Eichenberg
+847873, #Neuenstein
+1046020, #Neuental
+1046367, #Neuhof
+871276, #Neukirchen
+1046007, #Niedenstein
+1021251, #Niederaula
+996923, #Nieste
+996920, #Niestetal
+1046368, #Nüsttal
+1046021, #Oberaula
+871294, #Ottrau
+1046369, #Petersberg
+564870, #Philippsthal
+1046370, #Poppenhausen
+871752, #Rasdorf
+1084685, #Reinhardshagen
+1050013, #Ringgau
+845067, #Ronshausen
+1044843, #Rosenthal
+1017942, #Rotenburg an der Fulda
+1048949, #Schauenburg
+1021250, #Schenklengsfeld
+1046022, #Schrecksbach
+1046009, #Schwalmstadt
+871281, #Schwarzenborn
+996924, #Söhrewald
+1050014, #Sontra
+1046010, #Spangenberg
+1046351, #Tann
+996806, #Trendelburg
+1015412, #Twistetal
+886832, #Unknown name for way with ID 355520169
+1048871, #Vellmar
+1015415, #Vöhl
+1008380, #Volkmarsen
+1046023, #Wabern
+1015522, #Waldeck
+879069, #Waldkappel
+879068, #Wanfried
+1050011, #Wehretal
+1050012, #Weißenborn
+1248507, #Wesertal
+845068, #Wildeck
+1015414, #Willingen (Upland)
+1046025, #Willingshausen
+1050003, #Witzenhausen
+1046105, #Wolfhagen
+1046327, #Zierenberg
+979307, #Kassel
+
+
+
+
+
+Ahnatal
+Alheim
+Allendorf
+Bad Arolsen
+Bad Emstal
+Bad Hersfeld
+Bad Karlshafen
+Bad Salzschlirf
+Bad Sooden-Allendorf
+Bad Wildungen
+Bad Zwesten
+Battenberg
+Baunatal
+Bebra
+Berkatal
+Borken
+Breitenbach am Herzberg
+Breuna
+Bromskirchen
+Burghaun
+Burgwald
+Calden
+Cornberg
+Diemelsee
+Diemelstadt
+Dipperz
+Ebersburg
+Edermünde
+Edertal
+Ehrenberg
+Eichenzell
+Eiterfeld
+Eschwege
+Espenau
+Felsberg
+Flieden
+Frankenau
+Frankenberg
+Friedewald
+Frielendorf
+Fritzlar
+Fulda
+Fuldabrück
+Fuldatal
+Gemünden
+Gersfeld
+Gilserberg
+Grebenstein
+Großalmerode
+Großenlüder
+Gudensberg
+Gutsbezirk Kaufunger Wald
+Gutsbezirk Reinhardswald
+Guxhagen
+Habichtswald
+Haina
+Hatzfeld
+Hauneck
+Haunetal
+Helsa
+Heringen
+Herleshausen
+Hessisch Lichtenau
+Hilders
+Hofbieber
+Hofgeismar
+Hohenroda
+Homberg
+Hosenfeld
+Hünfeld
+Immenhausen
+Jesberg
+Kalbach
+Kaufungen
+Kirchheim
+Knüllwald
+Korbach
+Körle
+Künzell
+Lichtenfels
+Liebenau
+Lohfelden
+Ludwigsau
+Malsfeld
+Meinhard
+Meißner
+Melsungen
+Morschen
+Naumburg
+Nentershausen
+Neu-Eichenberg
+Neuenstein
+Neuental
+Neuhof
+Neukirchen
+Niedenstein
+Niederaula
+Nieste
+Niestetal
+Nüsttal
+Oberaula
+Ottrau
+Petersberg
+Philippsthal
+Poppenhausen
+Rasdorf
+Reinhardshagen
+Ringgau
+Ronshausen
+Rosenthal
+Rotenburg an der Fulda
+Schauenburg
+Schenklengsfeld
+Schrecksbach
+Schwalmstadt
+Schwarzenborn
+Söhrewald
+Sontra
+Spangenberg
+Tann
+Trendelburg
+Twistetal
+Unknown name for way with ID 355520169
+Vellmar
+Vöhl
+Volkmarsen
+Wabern
+Waldeck
+Waldkappel
+Wanfried
+Wehretal
+Weißenborn
+Wesertal
+Wildeck
+Willingen (Upland)
+Willingshausen
+Witzenhausen
+Wolfhagen
+Zierenberg
+Kassel
