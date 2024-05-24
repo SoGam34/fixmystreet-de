@@ -14,12 +14,8 @@ use strict;
 use warnings;
 use Moo;
 
-use FixMyStreet;
-
-use SOAP::Lite; # +trace => [qw(debug)];
-
-with 'FixMyStreet::Roles::SOAPIntegration';
-with 'FixMyStreet::Roles::ParallelAPI';
+with 'Integrations::Roles::SOAP';
+with 'Integrations::Roles::ParallelAPI';
 
 has attr => ( is => 'ro', default => 'http://webservices.whitespacews.com/' );
 has username => ( is => 'ro' );
@@ -198,6 +194,15 @@ sub GetSiteContracts {
     my $res = $self->call('GetSiteContracts', sitecontractInput => ixhash( Uprn => $uprn ));
 
     return $res->{SiteContracts}->{SiteContract};
+}
+
+sub GetFullWorksheetDetails {
+    my ( $self, $ws_id ) = @_;
+
+    my $res = $self->call( 'GetFullWorksheetDetails',
+        fullworksheetDetailsInput => ixhash( WorksheetId => $ws_id ) );
+
+    return $res->{FullWSDetails};
 }
 
 1;

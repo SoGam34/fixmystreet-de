@@ -14,7 +14,7 @@ use parent 'FixMyStreet::Cobrand::UKCouncils';
 use Moo;
 
 # We use the functionality of bulky waste, though it's called small items
-with 'FixMyStreet::Roles::CobrandBulkyWaste';
+with 'FixMyStreet::Roles::Cobrand::BulkyWaste';
 
 use strict;
 use warnings;
@@ -43,8 +43,8 @@ use FixMyStreet::App::Form::Waste::Garden::Sacks;
 use FixMyStreet::App::Form::Waste::Garden::Sacks::Renew;
 with 'FixMyStreet::Roles::Open311Multi';
 with 'FixMyStreet::Roles::CobrandOpenUSRN';
-with 'FixMyStreet::Roles::CobrandEcho';
-with 'FixMyStreet::Roles::SCP';
+with 'FixMyStreet::Roles::Cobrand::Echo';
+with 'FixMyStreet::Roles::Cobrand::SCP';
 use Integrations::Paye;
 
 # Brent covers some of the areas around it so that it can handle near-boundary reports
@@ -426,6 +426,8 @@ sub dashboard_export_problems_add_columns {
             container_req_type => 'Container Request Container Type',
             container_req_reason => 'Container Request Reason',
 
+            email_renewal_reminders_opt_in => 'Email Renewal Reminders Opt-In',
+
             missed_collection_id => 'Service ID',
             map { "item_" . $_ => "Small Item $_" } (1..11)
         )
@@ -495,6 +497,7 @@ sub dashboard_export_problems_add_columns {
             container_req_action => $container_req_action,
             container_req_type => $container_req_type,
             container_req_reason => $container_req_reason,
+            email_renewal_reminders_opt_in => $csv->_extra_field($report, 'email_renewal_reminders_opt_in'),
             missed_collection_id => $csv->_extra_field($report, 'service_id'),
         };
 
@@ -531,7 +534,7 @@ sub open311_munge_update_params {
 
 =head2 should_skip_sending_update
 
-Do not try and send updates to the ATAK backend.
+Do not try and send updates to the ATAK or Symology backends.
 
 =cut
 
@@ -539,7 +542,7 @@ sub should_skip_sending_update {
     my ($self, $update) = @_;
 
     my $code = $update->problem->contact->email;
-    return 1 if $code =~ /^ATAK/;
+    return 1 if $code =~ /^(ATAK|Symology)/;
     return 0;
 }
 
@@ -558,6 +561,7 @@ sub open311_update_missing_data {
 Reports made via the app probably won't have a NSGRef because we don't
 display the road layer. Instead we'll look up the closest asset from the
 WFS service at the point we're sending the report over Open311.
+We also might need to map one value to another.
 
 =cut
 
@@ -566,6 +570,12 @@ WFS service at the point we're sending the report over Open311.
             if (my $ref = $self->lookup_site_code($row, 'usrn')) {
                 $row->update_extra_field({ name => 'NSGRef', description => 'NSG Ref', value => $ref });
             }
+        }
+
+        my $ref = $row->get_extra_field_value('NSGRef') || '';
+        my $cfg = $self->feature('area_code_mapping') || {};
+        if ($cfg->{$ref}) {
+            $row->update_extra_field({ name => 'NSGRef', description => 'NSG Ref', value => $cfg->{$ref} });
         }
 
 =item * Adds NSGRef from WFS service as app doesn't include road layer for Echo
@@ -1068,6 +1078,15 @@ sub waste_bulky_missed_blocked_codes {
         },
     };
 }
+
+=head2 garden_subscription_email_renew_reminder_opt_in
+
+Gives users the option to opt-in or out of a reminder email for renewal
+when they first subscribe or renew.
+
+=cut
+
+sub garden_subscription_email_renew_reminder_opt_in { 1 }
 
 sub garden_collection_time { '6:30am' }
 

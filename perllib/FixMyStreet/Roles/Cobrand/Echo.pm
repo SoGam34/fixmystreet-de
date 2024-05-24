@@ -1,15 +1,19 @@
-package FixMyStreet::Roles::CobrandEcho;
+package FixMyStreet::Roles::Cobrand::Echo;
 
 use v5.14;
 use warnings;
 use DateTime;
 use DateTime::Format::Strptime;
+use List::Util qw(min);
 use Moo::Role;
-use Sort::Key::Natural qw(natkeysort_inplace);
+use POSIX qw(floor);
+# use Sort::Key::Natural qw(natkeysort_inplace);
 use FixMyStreet::DateRange;
 use FixMyStreet::DB;
 use FixMyStreet::WorkingDays;
 use Open311::GetServiceRequestUpdates;
+
+with 'FixMyStreet::Roles::EnforcePhotoSizeOpen311PreSend';
 
 requires 'waste_containers';
 requires 'waste_service_to_containers';
@@ -26,7 +30,7 @@ requires 'waste_bulky_missed_blocked_codes';
 
 =head1 NAME
 
-FixMyStreet::Roles::CobrandEcho - shared code between cobrands using an Echo backend
+FixMyStreet::Roles::Cobrand::Echo - shared code between cobrands using an Echo backend
 
 =cut
 
@@ -43,7 +47,7 @@ sub bin_addresses_for_postcode {
         value => $_->{Id},
         label => FixMyStreet::Template::title($_->{Description}),
     } } @$points ];
-    natkeysort_inplace { $_->{label} } @$data;
+    # natkeysort_inplace { $_->{label} } @$data;
     return $data;
 }
 
@@ -118,6 +122,10 @@ sub bin_services_for_address {
     my @to_fetch;
     my @task_refs;
     my @rows = $self->waste_relevant_serviceunits($result);
+    # Each row is normally a service unit but e.g. SLWP has multiple rows per
+    # service unit and we only want to call GetEventsForObject once with each
+    # service unit
+    my %seen_service_units;
     foreach (@rows) {
         my $schedules = $_->{Schedules};
         if ($self->moniker ne 'sutton' && $self->moniker ne 'kingston') { # K&S don't use overdue
@@ -126,7 +134,8 @@ sub bin_services_for_address {
 
         next unless $schedules->{next} or $schedules->{last};
         $_->{active} = 1;
-        push @to_fetch, GetEventsForObject => [ ServiceUnit => $_->{Id} ];
+        push @to_fetch, GetEventsForObject => [ ServiceUnit => $_->{Id} ]
+            unless $seen_service_units{$_->{Id}}++;
         push @task_refs, $schedules->{last}{ref} if $schedules->{last};
     }
     push @to_fetch, GetTasks => \@task_refs if @task_refs;
@@ -181,7 +190,7 @@ sub bin_services_for_address {
             }
         }
 
-        my $request_allowed = ($request_allowed{$service_id} || $self->moniker eq 'kingston' || $self->moniker eq 'sutton') && $request_max && $schedules->{next};
+        my $request_allowed = ($request_allowed{$service_id} || !%service_to_containers) && $request_max && $schedules->{next};
         my $row = {
             id => $_->{Id},
             service_id => $service_id,
@@ -512,6 +521,27 @@ sub waste_task_resolutions {
             $row->{report_allowed} = 0;
             $row->{report_locked_out} = 1;
         }
+    }
+}
+
+=head2 waste_on_the_day_criteria
+
+Treat an Outstanding/Allocated task as if it's the next collection and in
+progress, and do not allow missed collection reporting if the task is not
+completed.
+
+=cut
+
+sub waste_on_the_day_criteria {
+    my ($self, $completed, $state, $now, $row) = @_;
+
+    if ($state eq 'Outstanding' || $state eq 'Allocated') {
+        $row->{next} = $row->{last};
+        $row->{next}{state} = 'In progress';
+        delete $row->{last};
+    }
+    if (!$completed) {
+        $row->{report_allowed} = 0;
     }
 }
 
@@ -1211,5 +1241,29 @@ sub send_bulky_payment_echo_update_failed {
         }
     }
 }
+
+sub per_photo_size_limit_for_report_in_bytes {
+    my ($self, $report, $image_count) = @_;
+
+    # We only need to check bulky collections at present.
+    return 0 unless $report->cobrand_data eq 'waste' && $report->contact->category eq 'Bulky collection';
+
+    my $cfg = FixMyStreet->config('COBRAND_FEATURES');
+    return 0 unless $cfg;
+
+    my $echo_cfg = $cfg->{'echo'};
+    return 0 unless $echo_cfg;
+
+    my $max_size_per_image = $echo_cfg->{'max_size_per_image_bytes'};
+    my $max_size_images_total = $echo_cfg->{'max_size_image_total_bytes'};
+
+    return 0 unless $max_size_per_image || $max_size_images_total;
+    return $max_size_per_image if !$max_size_images_total;
+
+    my $max_size_per_image_from_total = floor($max_size_images_total / $image_count);
+    return $max_size_per_image_from_total if !$max_size_per_image;
+
+    return min($max_size_per_image, $max_size_per_image_from_total);
+};
 
 1;

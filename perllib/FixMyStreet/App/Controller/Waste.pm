@@ -294,7 +294,7 @@ sub confirm_subscription : Private {
 
     if ($c->cobrand->suppress_report_sent_email($p)) {
         # Send bulky confirmation email after report confirmation (see
-        # the suppress_report_sent_email in CobrandSLWP.pm)
+        # the suppress_report_sent_email for SLWP)
         $p->send_logged_email({ %{$c->stash} }, 0, $c->cobrand);
     }
 
@@ -642,7 +642,6 @@ sub property : Chained('/') : PathPart('waste') : CaptureArgs(1) {
     my $loading = ($c->req->{headers}->{'hx-request'} || "") eq "true";
     # non-JS page loads include a page_loading=1 request param
     $loading ||= $c->get_param('page_loading');
-    $c->stash->{partial_loading} = $loading;
 
     if ( $c->req->path =~ m#^waste/[:\w %]+$#i && !$loading) {
         $c->cobrand->call_hook( clear_cached_lookups_property => $id );
@@ -771,13 +770,6 @@ sub construct_bin_request_form {
             my $max = ref $maximum ? $maximum->{$id} : $maximum;
             push @$field_list, "container-$id" => {
                 type => 'Checkbox',
-                apply => [
-                    {
-                        when => { "quantity-$id" => sub { $max > 1 && $_[0] > 0 } },
-                        check => qr/^1$/,
-                        message => 'Please tick the box',
-                    },
-                ],
                 label => $name,
                 option_label => $c->stash->{containers}->{$id},
                 tags => { toggle => "form-quantity-$id-row" },
@@ -829,11 +821,13 @@ sub request : Chained('property') : Args(0) {
         request => {
             fields => [ grep { ! ref $_ } @$field_list, 'submit' ],
             title => $title,
-            $c->cobrand->moniker eq 'sutton' ? (intro => 'request/intro.html') : (),
+            intro => 'request/intro.html',
             check_unique_id => 0,
             next => $next,
         },
     ];
+
+    $c->cobrand->call_hook("waste_munge_request_form_pages", $c->stash->{page_list}, $field_list);
     $c->stash->{field_list} = $field_list;
     $c->forward('form');
 }
@@ -850,7 +844,9 @@ sub process_request_data : Private {
         my ($id) = /container-(.*)/;
         $c->cobrand->call_hook("waste_munge_request_data", $id, $data, $form);
         if ($payment) {
-            $c->set_param('payment', $payment);
+            unless ($c->cobrand->moniker eq 'kingston') {
+                $c->set_param('payment', $payment);
+            }
             $c->set_param('payment_method', $data->{payment_method} || 'credit_card');
         }
         $c->forward('add_report', [ $data, $payment ? 1 : 0 ]) or return;
@@ -1363,6 +1359,7 @@ sub setup_garden_sub_params : Private {
     } else {
         $service_id = $c->cobrand->garden_service_id;
     }
+    $c->set_param('email_renewal_reminders_opt_in', $data->{email_renewal_reminders} eq 'Yes' ? 'Y' : 'N') if $data->{email_renewal_reminders};
     $c->set_param('service_id', $service_id);
     $c->set_param('current_containers', $data->{current_bins});
     $c->set_param('new_containers', $data->{new_bins});

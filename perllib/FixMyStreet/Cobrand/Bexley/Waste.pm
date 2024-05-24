@@ -15,6 +15,102 @@ has 'whitespace' => (
     default => sub { Integrations::Whitespace->new(%{shift->feature('whitespace')}) },
 );
 
+sub waste_fetch_events {
+    my ( $self, $params ) = @_;
+
+    my $gsr_updates = Open311::GetServiceRequestUpdates->new(
+        current_body => $self->body,
+        system_user => $self->body->comment_user,
+    );
+
+    my $missed_collection_reports = $self->problems->search(
+        {   external_id => { like => 'Whitespace%' },
+            state => [ FixMyStreet::DB::Result::Problem->open_states() ],
+        },
+        { order_by => 'id' },
+    );
+
+    my $missed_collection_service_property_id = 68;
+    my $db = FixMyStreet::DB->schema->storage;
+
+    while ( my $report = $missed_collection_reports->next ) {
+        print 'Fetching data for report ' . $report->id . "\n" if $params->{verbose};
+
+        my $worksheet_id = $report->external_id =~ s/Whitespace-//r;
+        my $worksheet
+            = $self->whitespace->GetFullWorksheetDetails($worksheet_id);
+
+        # Get info for missed collection
+        my $missed_collection_properties;
+        for my $service_properties (
+            @{  $worksheet->{WSServiceProperties}{WorksheetServiceProperty}
+                    // []
+            }
+        ) {
+            next
+                unless $service_properties->{ServicePropertyID}
+                == $missed_collection_service_property_id;
+
+            $missed_collection_properties = $service_properties;
+        }
+
+        my $whitespace_state_string
+            = $missed_collection_properties
+            ? $missed_collection_properties->{ServicePropertyValue}
+            : '';
+
+        my $config = $self->feature('whitespace');
+        my $new_state
+            = $config->{missed_collection_state_mapping}
+                {$whitespace_state_string};
+        unless ($new_state) {
+            print "  No new state, skipping\n" if $params->{verbose};
+            next;
+        }
+
+        next
+            unless $self->waste_check_last_update( $params, $report,
+            $new_state );
+
+        my $request = {
+            description => $new_state->{text},
+            # No data from Whitespace for this, so make it now
+            comment_time =>
+                DateTime->now->set_time_zone( FixMyStreet->local_time_zone ),
+            external_status_code => $whitespace_state_string,
+            prefer_template      => 1,
+            status               => $new_state->{fms_state},
+            # TODO Is there an ID for specific worksheet update?
+            update_id => $report->external_id,
+        };
+
+        print
+            "  Updating report to state '$request->{status}' - '$request->{description}' ($request->{external_status_code})\n"
+            if $params->{verbose};
+
+        $gsr_updates->process_update(
+            $request,
+            $report,
+        );
+    }
+}
+
+sub waste_check_last_update {
+    my ( $self, $params, $report, $new_state ) = @_;
+
+    my $last_update = $report->comments->search(
+        { external_id => { like => 'Whitespace%' } },
+        { order_by => { -desc => 'id' } }
+    )->first;
+
+    if ( $last_update && $new_state->{fms_state} eq $last_update->problem_state ) {
+        print "  Latest update matches fetched state, skipping\n" if $params->{verbose};
+        return;
+    }
+
+    return 1;
+}
+
 sub bin_addresses_for_postcode {
     my ($self, $postcode) = @_;
 
@@ -51,6 +147,22 @@ sub look_up_property {
         );
     }
 
+    # Check if today or any of the next 7 days are bank holidays
+    my $upcoming_bank_holiday = 0;
+    my $wd = FixMyStreet::WorkingDays->new(public_holidays => FixMyStreet::Cobrand::UK::public_holidays());
+    for (-7..14) {
+        my $dt = DateTime->now->add(days => $_);
+        if ($wd->is_public_holiday($dt)) {
+            $upcoming_bank_holiday = 1;
+            last;
+        }
+    }
+
+    # Add query string parameter for showing bank holiday message
+    if ($self->{c}->get_param('show_bank_holiday_message')) {
+        $upcoming_bank_holiday = 1;
+    }
+
     return {
         # 'id' is same as 'uprn' for Bexley, but since the wider wasteworks code
         # (e.g. FixMyStreet/App/Controller/Waste.pm) calls 'id' in some cases
@@ -61,6 +173,7 @@ sub look_up_property {
             BexleyAddresses::address_for_uprn($uprn) ),
         latitude => $site->{Site}->{SiteLatitude},
         longitude => $site->{Site}->{SiteLongitude},
+        upcoming_bank_holiday => $upcoming_bank_holiday,
 
         %parent_property,
     };
@@ -106,6 +219,9 @@ sub bin_services_for_address {
     for my $service (@$site_services) {
         next if !$service->{NextCollectionDate};
 
+        my $container = $containers->{ $service->{ServiceItemName} };
+        next unless $container;
+
         my $next_dt = eval {
             DateTime::Format::W3CDTF->parse_datetime(
                 $service->{NextCollectionDate} );
@@ -138,16 +254,12 @@ sub bin_services_for_address {
             next if $now_dt > $to_dt;
         }
 
-        my $containers = $self->_containers($property);
-
         my ($round) = split / /, $service->{RoundSchedule};
         my $filtered_service = {
             id             => $service->{SiteServiceID},
             service_id     => $service->{ServiceItemName},
-            service_name =>
-                $containers->{ $service->{ServiceItemName} }{name},
-            service_description =>
-                $containers->{ $service->{ServiceItemName} }{description},
+            service_name        => $container->{name},
+            service_description => $container->{description},
             round_schedule => $service->{RoundSchedule},
             round          => $round,
             next           => {
@@ -237,7 +349,11 @@ sub bin_services_for_address {
     if ( my $id = $frequency_types{fortnightly} ) {
         $id = 'Wk-' . $id;
         my $links = $self->{c}->cobrand->feature('waste_calendar_links');
-        $self->{c}->stash->{calendar_link} = $links->{$id};
+        $self->{c}->stash->{calendar_link} = [
+            {   href => $links->{$id},
+                text => 'View and download collection calendar',
+            }
+        ];
     }
 
     @site_services_filtered = $self->_remove_service_if_assisted_exists(@site_services_filtered);
@@ -546,7 +662,9 @@ sub image_for_unit {
     return '/i/waste-containers/bexley/' . $images->{$service_id};
 }
 
-sub bin_day_format { '%A, %-d~~~ %B %Y' }
+sub bin_day_format { '%A %-d %B %Y' }
+
+sub waste_images_2x_unavailable { 1 }
 
 # TODO This logic is copypasted across multiple files; get it into one place
 my %irregulars = ( 1 => 'st', 2 => 'nd', 3 => 'rd', 11 => 'th', 12 => 'th', 13 => 'th');
@@ -750,7 +868,7 @@ HTML
             description => 'Non-recyclable waste',
         },
         'RES-SACK' => {
-            name        => 'Rubbish collection',
+            name        => 'Black Sack(s)',
             description => 'Non-recyclable waste',
         },
     };
@@ -830,8 +948,8 @@ sub waste_munge_report_form_fields {
         };
     } else {
         push @$field_list, extra_detail => {
-            type => 'Hidden',
-            value => 'Front of property',
+            type    => 'Hidden',
+            default => 'Front of property',
         };
     }
 }
