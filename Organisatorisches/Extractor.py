@@ -13,15 +13,13 @@ input = json.load(input)
 
 for x, obj in input.items():
     if obj["type"] == 'O08':
-        output.write(str(obj["id"])+ ', #'+obj["name"]+'\n')
-
+        output.write(str(obj["id"])+ '\n')
+output.write('\n\n\n # 006 \n\n')
 for x, obj in input.items():
     if obj["type"] == 'O06':
-        output.write(str(obj["id"])+ ', #'+obj["name"]+'\n')
-
+        output.write(str(obj["id"])+ '\n')
 
 output.write('\n\n\n\n\n')
-
 
 for x, obj in input.items():
     if obj["type"] == 'O08':

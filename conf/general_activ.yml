@@ -14,14 +14,15 @@
 # for you.
 
 # PostgreSQL database details for FixMyStreet
-FMS_DB_HOST: 'postgres.svc'
+FMS_DB_HOST: 'localhost'
 FMS_DB_PORT: '5432'
-FMS_DB_NAME: 'fixmystreet'
+FMS_DB_NAME: 'fms'
 FMS_DB_USER: 'fms'
-FMS_DB_PASS: 'fms'
+FMS_DB_PASS: ''
+FMS_DB_SSLMODE: 'prefer'
 
 # The base URL of the install.
-BASE_URL: 'http://localhost:8000'
+BASE_URL: 'http://www.example.org'
 # Use the below if you're using the Catalyst development server
 #   BASE_URL: 'http://localhost:3000'
 SECURE_PROXY_SSL_HEADER: ''
@@ -33,18 +34,14 @@ CONTENT_SECURITY_POLICY: ''
 # allow JavaScript on, or want to specify extra script-src CSP directives, set
 # this to a e.g. space-separated list of domains or a list of the same.
 
-# This is so the fixmystreet container knows it is running
-# behind an nginx container (not on the same host)
-using_frontend_proxy: 1
-
 # Email domain used for emails, and contact name/email for admin use.
-EMAIL_DOMAIN: '127.0.0.1.xip.io'
-CONTACT_EMAIL: 'help@127.0.0.1.xip.io'
+EMAIL_DOMAIN: 'example.org'
+CONTACT_EMAIL: 'team@example.org'
 CONTACT_NAME: 'FixMyStreet'
 # Address used for emails you don't expect a reply to (e.g. confirmation
 # emails); can be same as CONTACT_EMAIL above, of course, if you don't have a
 # special address.
-DO_NOT_REPLY_EMAIL: 'help@127.0.0.1.xip.io'
+DO_NOT_REPLY_EMAIL: 'noreply@example.org'
 
 # Whether this is a development site or not. It will mean e.g. templates/
 # CSS modified times aren't cached
@@ -63,11 +60,12 @@ STAGING_FLAGS:
 
 # What to use as front page/alert example places placeholder
 # Defaults to High Street, Main Street
-EXAMPLE_PLACES: [ 'High Street', 'Main Street' ]
+EXAMPLE_PLACES: [ 'Hauptstraße', 'Hauptplatz' ]
 
 # An array of languages for the site, in the following format:
 # <language code>,<pretty name>,<locale>
 LANGUAGES:
+  - 'de,German,de_DE'
   - 'en-gb,English,en_GB'
 
 # A postgresql text search configuration value - it should match the
@@ -90,36 +88,16 @@ PHOTO_STORAGE_OPTIONS:
   # Where uploaded photos will be stored
   UPLOAD_DIR: '../upload/'
 
-# If using the S3 backend, you'll need to set the following options instead:
-#PHOTO_STORAGE_OPTIONS:
-#  BUCKET: 'fixmystreet-photos'
-#  ACCESS_KEY: ''
-#  SECRET_KEY: ''
-#  PREFIX: '' # optional prefix for key names in bucket, e.g. if you
-              # have multiple FMS sites storing photos in the same bucket.
-#  CREATE_BUCKET: 0 # optional, set to 1 if the S3 bucket should be created if
-                    # it doesn't already exist. Requires the appropriate AWS
-                    # permissions.
-#  REGION: 'eu-west-1' # optional, only used if CREATE_BUCKET is set. Controls
-                       # which AWS region the S3 bucket will be created in.
-
 # Location of MapIt, to map points to administrative areas, and what types of
 # area from it you want to use. If left blank, a default area will be used
 # everywhere (a URL needs to be given for non-web things, like sending of
 # reports, to function).
-# If using the Catalyst development server, set to
-#   MAPIT_URL: 'http://localhost:3000/fakemapit/'
-#   MAPIT_TYPES: [ 'ZZZ' ]
-# In the UK, you probably want, to cover all councils:
-#   MAPIT_URL: 'http://mapit.mysociety.org/'
-#   MAPIT_TYPES: [ 'DIS', 'LBO', 'MTD', 'UTA', 'CTY', 'COI', 'LGD' ]
-# But perhaps MAPIT_TYPES: [ 'WMC' ] if you want to report on a per-constituency basis?
 # If our global MapIt (using OpenStreetMap data) contains boundaries you can use:
 #   MAPIT_URL: 'http://global.mapit.mysociety.org/'
 # And then specify whichever type code have the boundaries you want:
 #   MAPIT_TYPES: [ 'O06' ]
-MAPIT_URL: 'http://localhost:9000/fakemapit/'
-MAPIT_TYPES: [ 'ZZZ' ]
+MAPIT_URL: 'http://global.mapit.mysociety.org/'
+MAPIT_TYPES: ['O08']
 
 # If the MapIt you're using in MAPIT_URL requires an API key
 # (as https://mapit.mysociety.org/ does, for example), specify it here.
@@ -132,7 +110,7 @@ MAPIT_TYPES: [ 'ZZZ' ]
 #   MAPIT_ID_WHITELIST: [ 240838, 246176, 246733 ]
 #   MAPIT_GENERATION: 2
 MAPIT_ID_WHITELIST: []
-MAPIT_GENERATION: 0
+MAPIT_GENERATION: 10
 
 # If your MapIt has the concept of council wards (subareas of councils, where
 # people can sign up for alerts, but not report things), then you can give the
@@ -167,7 +145,8 @@ BING_MAPS_API_KEY: ''
 #     google_country: <.ccTLD to restrict results to>
 #     lang: <language for results>
 #
-GEOCODING_DISAMBIGUATION: ''
+GEOCODING_DISAMBIGUATION: 
+  country: de
 
 # The type of map you want to use. If left blank, the default is OpenStreetMap.
 # Other options are currently pretty UK specific, including "FMS" for UK
@@ -241,7 +220,7 @@ GAZE_URL: 'https://gaze.mysociety.org/gaze'
 
 # Memcached host
 # This can be safely left out and will default to '127.0.0.1' even if not present.
-MEMCACHED_HOST: 'memcached.svc'
+MEMCACHED_HOST: '127.0.0.1'
 
 # Cache timeout - integer, optional, default 3600s (1 hour)
 # Used for cache of front page stats/recent list, and /reports max-age.
@@ -288,3 +267,8 @@ FETCH_COMMENTS_PROCESS_TIMEOUT: 0
 # If you use the daemon for sending reports, rather than the cron script,
 # this is how many children it will have.
 QUEUE_DAEMON_PROCESSES: 4
+
+O311_POLLING_INTERVAL: 2
+O311_POLLING_MAX_TRIES: 5
+
+WASTEWORKS_BACKEND_TMP_DIR: '/tmp'
